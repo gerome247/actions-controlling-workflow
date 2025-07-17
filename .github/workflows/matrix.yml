@@ -1,0 +1,92 @@
+name: Continue Website Deployment
+on:
+  push:
+    branches:
+      - main
+      - master
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Get code
+        uses: actions/checkout@v4
+      - name: Cache dependencies
+        id: cache
+        uses: actions/cache@v4
+        with:
+          path: node_modules
+          key: deps-node-modules-${{ hashFiles('**/package-lock.json') }}
+      - name: Install dependencies
+        if: steps.cache.outputs.cache-hit != 'true'
+        run: npm ci
+      - name: Lint code
+        run: npm run lint
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Get code
+        uses: actions/checkout@v4
+      - name: Cache dependencies
+        id: cache
+        uses: actions/cache@v4
+        with:
+          path: node_modules
+          key: deps-node-modules-${{ hashFiles('**/package-lock.json') }}
+      - name: Install dependencies
+        if: steps.cache.outputs.cache-hit != 'true'
+        run: npm ci
+      - name: Test code
+        continue-on-error: true
+        id: run-tests
+        run: npm run test
+      - name: Upload test report
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-report
+          path: test.json
+  build:
+    needs: test
+    continue-on-error: true
+    strategy:
+      matrix:
+        node-version: [20, 22]
+        operating-system: [ubuntu-latest, windows-latest]
+        include:
+          - node-version: 20
+            operating-system: ubuntu-latest
+        exclude:
+          - node-version: 22
+            operating-system: windows-latest
+    runs-on: ${{ matrix.operating-system }}
+    steps:
+      - name: Get code
+        uses: actions/checkout@v4
+      - name: Install NodeJS
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node-version }}
+      - name: Install dependencies
+        run: npm ci
+      - name: Build Project
+        run: npm run build
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Get build artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: dist-files
+      - name: Output contents
+        run: ls
+      - name: Deploy
+        run: echo "Deploying..."
+  report:
+    needs: [lint, deploy]
+    if: failure()
+    runs-on: ubuntu-latest
+    steps:
+      - name: Output information
+        run: |
+          echo "Something went wrong"
+          echo "${{ toJSON(github) }}"
