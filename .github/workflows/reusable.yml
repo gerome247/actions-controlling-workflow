@@ -1,8 +1,35 @@
 name: Reusable Deploy
-on: workflow_call
+on:
+  workflow_call:
+    inputs:
+      artifact-name:
+        description: 'Name of the artifact to download'
+        required: true
+        type: string
+    # secrets:
+      # some-secret:
+        # required: false
+    outputs:
+      result:
+        description: 'Status of the deployment'
+        value: ${{ jobs.deploy.outputs.outcome }}
 jobs:
+
   deploy:
+    outputs:
+      outcome: ${{ steps.deploy.outputs.step-result }}
     runs-on: ubuntu-latest
     steps:
+      - name: Get build artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: ${{ inputs.artifact-name }}
+      - name: Output contents
+        run: ls
       - name: Output information
         run: echo "Deploying & uploading..."
+      - name: Deploy
+        id: deploy
+        run: |
+          echo "Deployment successful"
+          echo "::set-output name=step-result::success"
